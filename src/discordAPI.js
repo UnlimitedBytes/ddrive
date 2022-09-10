@@ -14,10 +14,12 @@ class DiscordAPI {
     /**
      * Fetch messages
      * @param {Object} query
+     * @param {String|null} channelId
      * @return {Promise<*>}
      */
-    async fetchMessages(query) {
-        const endpoint = `/channels/${this.channelId}/messages`
+    async fetchMessages(query, channelId = null) {
+        const id = channelId || this.channelId
+        const endpoint = `/channels/${id}/messages`
 
         return this.rest.get(endpoint, { query: querystring.encode(query) })
     }
@@ -49,6 +51,18 @@ class DiscordAPI {
         const endpoint = `/channels/${this.channelId}/messages/${messageId}`
 
         return this.rest.delete(endpoint)
+    }
+
+    /**
+     * Get channel id for given webhook
+     * @param {String} webhookId
+     * @param {String} webhookToken
+     * @return {Promise<*>}
+     */
+    async getChannelFromWebhook(webhookId, webhookToken) {
+        const endpoint = `/webhooks/${webhookId}/${webhookToken}`
+
+        return this.rest.get(endpoint).then((data) => data.channel_id)
     }
 }
 

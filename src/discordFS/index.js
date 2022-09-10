@@ -1,4 +1,5 @@
 // eslint-disable-next-line max-classes-per-file
+const fs = require('fs/promises')
 const path = require('path')
 const { v4: uuidv4 } = require('uuid')
 const _ = require('lodash')
@@ -17,6 +18,7 @@ class DiscordFS {
      * @param {Object} opts
      * @param {String} opts.token - Discord bot/user auth token
      * @param {String} opts.channelId - id of text channel where you want to store your data
+     * @param {String|null} [opts.webhooksFile=null] - path to file with webhooks
      * @param {Number} [opts.chunkSize=7864320] - Number of bytes to be chunked for large file. Must be less than 8MB for discord bot user.
      */
     constructor(opts) {
@@ -28,6 +30,8 @@ class DiscordFS {
         })
 
         this.chunkSize = opts.chunkSize || 7864320
+        this.webhooksFile = opts.webhooksFile || null
+        this.webhooks = []
         this.files = []
         this.directories = []
         this.uploadLock = new Set()
@@ -48,15 +52,21 @@ class DiscordFS {
         return this.files.reduce((t, f) => t + f.size, 0)
     }
 
+    async loadWebhooks() {
+        const webhooks = await fs.readFile(this.webhooksFile, 'utf8')
+        this.webhooks = webhooks.split('\n').filter((line) => line !== '')
+
+        return this.webhooks
+    }
+
     /**
-     * Load file index from messages
-     * @return {Promise<void>}
+     *
+     * @param {String} channelId
      */
-    async load() {
-        debug('>>> booting discordFS')
-        // Load all messages in memory
+    async loadMessages(channelId) {
         const tempMessageCache = []
-        let channelMessages = await this.discordAPI.fetchMessages({ limit: 100 })
+
+        let channelMessages = await this.discordAPI.fetchMessages({ limit: 100 }, channelId)
         while (channelMessages.length > 0) {
             // Parse message content and filter invalid message
             tempMessageCache.push(...channelMessages
@@ -72,12 +82,39 @@ class DiscordFS {
                     limit: 100,
                     before: tempMessageCache[tempMessageCache.length - 1].id,
                 },
+                channelId,
             )
         }
 
+        return tempMessageCache
+    }
+
+    /**
+     * Load file index from messages
+     * @return {Promise<void>}
+     */
+    async load() {
+        debug('>>> booting discordFS')
+
+        if (this.webhooksFile) await this.loadWebhooks()
+
+        // Load all messages in memory
+        const tempMessageCache = await this.loadMessages(this.channelId)
+
+        // eslint-disable-next-line no-restricted-syntax
+        for (const webhook of this.webhooks) {
+            const [webhookId, webhookToken] = new URL(webhook).pathname.split('/').slice(3)
+            // eslint-disable-next-line no-await-in-loop
+            const webhookMessages = await this.loadMessages(await this.discordAPI.getChannelFromWebhook(webhookId, webhookToken))
+
+            tempMessageCache.push(...webhookMessages)
+        }
+
         const messagesGroupByType = _.groupBy(tempMessageCache, (message) => message.content.type)
+
         // Channel is empty
         if (!messagesGroupByType.directory) return
+
         // Load Directories
         messagesGroupByType.directory.forEach((message) => {
             // Create directory entry
@@ -93,6 +130,7 @@ class DiscordFS {
         Object.values(_.groupBy(messagesGroupByType.file, (message) => message.content.fileId))
             .forEach((fileParts) => {
                 const [firstPart] = fileParts
+
                 // Create file object
                 const file = new File({
                     id: firstPart.content.fileId,
@@ -100,6 +138,7 @@ class DiscordFS {
                     name: firstPart.content.name,
                     createdAt: new Date(firstPart.timestamp).getTime(),
                 })
+
                 fileParts.forEach((filePart) => {
                     const [attachment] = filePart.attachments
                     const entry = new FileEntry({
@@ -110,10 +149,13 @@ class DiscordFS {
                         url: attachment.url,
                         mid: filePart.id,
                     })
+
                     file.parts.push(entry)
                 })
+
                 this.files.push(file)
             })
+
         debug('>>> DiscordFS load complete')
     }
 
