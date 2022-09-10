@@ -81,7 +81,7 @@
     const search_button = document.getElementById('search-button')
 
     // search file/ folder utility
-    function search(){  
+    function search(){
         window.location.replace(`${window.location.origin}/find/${document.getElementById('file-search').value}`)
     }
 
@@ -91,7 +91,7 @@
         }
     }
 
-    search_button.addEventListener('click', search) // listening to ui search button 
+    search_button.addEventListener('click', search) // listening to ui search button
     file_search_input.addEventListener('keyup', enterKeyEvent) // listening to enter key event
 
     // Hide Modal
