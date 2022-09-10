@@ -2,7 +2,7 @@
 
 const debug = require('debug')
 const yargs = require('yargs/yargs')(process.argv.slice(2))
-const DiscordFS = require('../src/discordFS/')
+const DiscordFS = require('../src/discordFS')
 const HTTPServer = require('../src/httpServer')
 
 debug.enable('*') // Enable logging
@@ -10,13 +10,13 @@ debug.enable('*') // Enable logging
 //
 // Disable Experimental features warning
 //
-const { emitWarning } = process;
+const { emitWarning } = process
 
 process.emitWarning = (warning, ...args) => {
     const warningsToIgnore = ['buffer.Blob is an experimental feature. This feature could change at any time']
     if (warningsToIgnore.includes(warning)) return
-    return emitWarning(warning, ...args);
-};
+    emitWarning(warning, ...args)
+}
 
 // Parse option
 // Env vars will be parsed as option
@@ -45,12 +45,17 @@ const args = yargs
         required: true,
         type: 'string',
     })
+    .option('webhooks', {
+        alias: 'W',
+        describe: 'Path to file containing webhooks to use',
+        type: 'string',
+    })
     .config()
     .argv
 
 // Extract arguments
 const {
-    token, auth, channelId, httpPort = parseInt(process.env.PORT, 10),
+    token, auth, channelId, httpPort = parseInt(process.env.PORT, 10), webhooks: webhooksFile,
 } = args
 
 //
@@ -58,7 +63,7 @@ const {
 //
 const startApp = async () => {
     // Boot discordFS
-    const discordFS = new DiscordFS({ token, channelId })
+    const discordFS = new DiscordFS({ token, channelId, webhooksFile })
     await discordFS.load() // Build file index
 
     // Create HTTP Server

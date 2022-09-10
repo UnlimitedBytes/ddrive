@@ -34,11 +34,18 @@ const args = yargs
         required: true,
         type: 'string',
     })
+    .option('webhooks', {
+        alias: 'W',
+        describe: 'Path to file containing webhooks to use',
+        type: 'string',
+    })
     .config()
     .argv
 
 // Extract arguments
-const { token, channelId, path: dataPath } = args
+const {
+    token, channelId, path: dataPath, webhooks: webhooksFile,
+} = args
 const appDebug = debug('app')
 
 //
@@ -46,7 +53,7 @@ const appDebug = debug('app')
 //
 const startApp = async () => {
     // Boot discordFS
-    const discordFS = new DiscordFS({ token, channelId })
+    const discordFS = new DiscordFS({ token, channelId, webhooksFile })
     await discordFS.load() // Build file index
 
     const files = Util.getAllFiles(dataPath).map((p) => path.relative(process.cwd(), p))
